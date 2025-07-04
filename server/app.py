@@ -55,15 +55,19 @@ class Login(Resource):
 
     def post(self):
         
-        username = request.get_json().get('username')
-        user = User.query.filter(User.username == username).first()
+        data = request.get_json()
+        username = data.get('username')
 
-        if user:
-        
-            session['user_id'] = user.id
-            return user.to_dict(), 200
+        if not username:
+            return {'error': 'Username is required'}, 400
 
-        return {}, 401
+        user = User.query.filter_by(username=username).first()
+
+        if not user:
+            return {'error': 'User not found'}, 404
+
+        session['user_id'] = user.id
+        return user.to_dict(), 200
 
 class Logout(Resource):
 
@@ -77,7 +81,7 @@ class CheckSession(Resource):
 
     def get(self):
         
-        user_id = session['user_id']
+        user_id = session.get('user_id')
         if user_id:
             user = User.query.filter(User.id == user_id).first()
             return user.to_dict(), 200
@@ -87,12 +91,27 @@ class CheckSession(Resource):
 class MemberOnlyIndex(Resource):
     
     def get(self):
-        pass
+        if not session.get('user_id'):
+            return {'error': 'Unauthorized. Please log in to access this content.'}, 401
+
+        member_articles = Article.query.filter_by(is_member_only=True).all()
+        articles_json = [article.to_dict() for article in member_articles]
+
+        return make_response(jsonify(articles_json), 200)
 
 class MemberOnlyArticle(Resource):
     
     def get(self, id):
-        pass
+        if not session.get('user_id'):
+            return {'error': 'Unauthorized. Please log in to access this content.'}, 401
+
+        article = Article.query.filter_by(id=id, is_member_only=True).first()
+
+        if not article:
+            return {'error': 'Member-only article not found'}, 404
+
+        return make_response(jsonify(article.to_dict()), 200)
+        
 
 api.add_resource(ClearSession, '/clear', endpoint='clear')
 api.add_resource(IndexArticle, '/articles', endpoint='article_list')
